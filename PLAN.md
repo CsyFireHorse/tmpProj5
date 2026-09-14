@@ -16,6 +16,28 @@
 
 ---
 
+## 0.1 实施状态
+
+M0–M6 已实现并落地在 `packages/server` 与 `packages/web`，M7（打包发 PyPI）未做。
+上手方式与功能清单见 [`README.md`](README.md)。
+
+**与本计划的偏差，以及原因：**
+
+- **路由用 react-router 而非 TanStack Router。** 本项目的路由只有三条（欢迎页 / 会话 / 统计），
+  TanStack Router 的类型化 search params 换不回它的配置成本；过滤条件直接存在 `URLSearchParams` 里。
+- **虚拟化只用在会话列表，转录页没有。** 转录是变高内容（diff、工具输出、markdown），
+  虚拟化需要精确测高才不抖。当前按会话整体返回、消息级折叠已经够用；等出现上万 part 的真实会话再补。
+- **Cursor CLI 的 protobuf turn graph 仍未解码。** 顺序按 blob 插入顺序 + 时间戳近似，
+  并在会话页顶部**明示**这是近似值（计划第 8 节的"不把不确定当确定"）。
+- **`mypy` 未接入**，只跑 `ruff`。适配器大量处理 `Any` 形态的外部 JSON，
+  严格类型检查在这层收益低噪音高；类型约束集中在 Pydantic 模型的出口处。
+- **前端 E2E 用浏览器实测代替 Playwright**：主链路（列表 → 会话 → 展开工具调用 → 搜索 → 统计 → 过滤）
+  已逐项走通并录屏，但没有落成 CI 里可重跑的 Playwright 用例。这是首版最明显的测试缺口。
+- **合成 fixtures 生成器放进了包里**（`agent_chat_viewer/demo.py`，而非只在 `scripts/` 下），
+  因为它同时是 `--demo` 模式的数据源——没装任何 agent 的机器也能看界面。
+
+---
+
 ## 1. 技术选型
 
 | 层 | 选型 | 理由 |
@@ -324,10 +346,11 @@ class Provider(Protocol):
 
 ## 9. 首版验收清单
 
-- [ ] 一条命令启动，自动检测本机已安装的 agent 并列出会话。
-- [ ] Cursor IDE、Cursor CLI、Codex、opencode 四个来源的会话出现在同一列表，可按 provider / 项目 / 时间过滤。
-- [ ] 打开任一会话，正确渲染用户消息、助手回复、推理、工具调用（含入参出参）、文件 diff。
-- [ ] 全文检索能跨会话跨 provider 命中并高亮。
-- [ ] 任一会话可导出为 Markdown。
-- [ ] 目标 agent 正在运行时读取不报错、不影响其工作、不修改任何源文件。
-- [ ] 遇到无法解析的记录时，UI 降级展示原始 JSON 而非整页失败。
+- [x] 一条命令启动，自动检测本机已安装的 agent 并列出会话。
+- [x] Cursor IDE、Cursor CLI、Codex、opencode 四个来源的会话出现在同一列表，可按 provider / 项目 / 时间过滤。
+- [x] 打开任一会话，正确渲染用户消息、助手回复、推理、工具调用（含入参出参）、文件 diff。
+- [x] 全文检索能跨会话跨 provider 命中并高亮。
+- [x] 任一会话可导出为 Markdown。
+- [x] 目标 agent 正在运行时读取不报错、不影响其工作、不修改任何源文件
+      （`tests/test_sqlite_ro.py`：边写边读 WAL 库、断言源文件哈希不变、断言连接拒绝写入）。
+- [x] 遇到无法解析的记录时，UI 降级展示原始 JSON 而非整页失败。
