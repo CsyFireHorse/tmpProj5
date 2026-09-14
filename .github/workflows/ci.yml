@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv venv --python 3.12 .venv
+        working-directory: packages/server
+      - run: uv pip install -e ".[dev]"
+        working-directory: packages/server
+      - run: ./.venv/bin/ruff check src ../../scripts ../../tests
+        working-directory: packages/server
+      - run: ./.venv/bin/ruff format --check src ../../scripts ../../tests
+        working-directory: packages/server
+      - run: packages/server/.venv/bin/python -m pytest tests -q
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: packages/web/package-lock.json
+      - run: npm ci
+        working-directory: packages/web
+      - run: npx tsc -b --noEmit
+        working-directory: packages/web
+      - run: npx oxlint src
+        working-directory: packages/web
+      - run: npm test
+        working-directory: packages/web
+      - run: npm run build
+        working-directory: packages/web
+
+  types-in-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: uv venv --python 3.12 .venv && uv pip install -e "."
+        working-directory: packages/server
+      - run: packages/server/.venv/bin/python scripts/dump_openapi.py packages/web/openapi.json
+      - run: npm ci && npm run gen:types
+        working-directory: packages/web
+      # The frontend must never hand-edit API types.
+      - run: git diff --exit-code packages/web/src/api/schema.d.ts
